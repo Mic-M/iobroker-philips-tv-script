@@ -17,6 +17,7 @@
  *  - Some info: https://community.openhab.org/t/philips-tv-2016-binding/64579/61
  * ----------------------------------------------------
  * Change Log:
+ *  0.6  Mic-M * Added Commands Ambilight Hue On/Off - thanks to BeautyBoyBob
  *  0.5  Mic-M * Initial release on Github
  *******************************************************************************/
 
@@ -58,6 +59,8 @@ const CONTROL_DEVICE_CMD_ON = 1;
 // Hier definieren wir die einzelnen Post Commands. 
 let pCommands = [];
 //        0.Command Name                       1.Path              2. curl Command      
+pCommands['Cmd: Ambilight Hue On'] = ['menuitems/settings/update',   '{"values":[{"value":{"Nodeid":2131230774,"Controllable":"true","Available":"true","data":{"value":"true"}}}]}'];  
+pCommands['Cmd: Ambilight Hue Off'] = ['menuitems/settings/update',   '{"values":[{"value":{"Nodeid":2131230774,"Controllable":"true","Available":"true","data":{"value":"false"}}}]}'];  
 pCommands['Cmd: Ambilight Off']             = ['ambilight/power',   '{"power":"Off"}'];
 pCommands['Cmd: Ambilight On']              = ['ambilight/power',   '{"power":"On"}'];
 pCommands['Cmd: Ambilight On Video Standard'] = ['ambilight/currentconfiguration',   '{"styleName":"FOLLOW_VIDEO","isExpert":false,"menuSetting":"STANDARD"}'];

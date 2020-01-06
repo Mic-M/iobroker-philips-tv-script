@@ -28,7 +28,7 @@
 // Pfad, unter dem die Objekte angelegt werden.
 const STATE_PATH = 'javascript.0.PhilipsTV-Script.';
 
-// Generate User/Password: see https://github.com/nstrelow/ha_philips_2016
+// Generierung Username/Passwort: siehe https://forum.iobroker.net/post/352828
 const PHILIPS_USER = 'xxxxxxxxxxxxxxxxxxxxx';
 const PHILIPS_PASS = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 

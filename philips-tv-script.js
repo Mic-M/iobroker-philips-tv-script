@@ -17,8 +17,9 @@
  *  - Some info: https://community.openhab.org/t/philips-tv-2016-binding/64579/61
  * ----------------------------------------------------
  * Change Log:
- *  0.6  Mic-M * Added Commands Ambilight Hue On/Off - thanks to BeautyBoyBob
- *  0.5  Mic-M * Initial release on Github
+ *  1.0a  Mic-M * Add Wake on LAN/WiFi support to turn TV on
+ *  0.6   Mic-M * Added Commands Ambilight Hue On/Off - thanks to BeautyBoyBob
+ *  0.5   Mic-M * Initial release on Github
  *******************************************************************************/
 
 
@@ -32,24 +33,52 @@ const STATE_PATH = 'javascript.0.PhilipsTV-Script.';
 const PHILIPS_USER = 'xxxxxxxxxxxxxxxxxxxxx';
 const PHILIPS_PASS = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 
-// URL, change IP address accordingly (and you may also need to change port, see for example https://github.com/eslavnov/pylips)
-const PHILIPS_URL = 'https://xx.xx.xx.xx:1926/6/';
+// Philips TV IP Addresse.
+const PHILIPS_IP = 'xx.xx.xx.xx';  // Change accordingly to the IP address of your Philips TV.
 
-// Logging
-const LOG_INFO = true;
-const LOG_DEBUG = false;
+// Philips TV Erweiterte Einstellungen. Erst mal nicht ändern und so belassen. Siehe hier für Details: https://github.com/eslavnov/pylips/wiki
+const PHILIPS_PORT = 1926; // Android TVs primarily use port 1926, non-Android TV use port 1925 only. See https://github.com/eslavnov/pylips/wiki
+const PHILIPS_API_VERSION = '6';
+const PHILIPS_HTTP = 'https'; // you could change to 'http' if needed
+
+// Kommando das zum TV einschalten abgesetzt wird. Default ist 'Key: Standby'.
+// Genau so kann man hier z.B. 'Key: Home' nehmen, oder 'Launch: Netflix' für Netflix, etc. Siehe pCommands unten für alle möglichen Befehle.
+const COMMAND_TO_LAUNCH = 'Key: Standby'; 
+
 
 /**
- * Falls Philips-TV für mehrere Minuten im Standby ist, ist dieser nicht mehr per PHILIPS_URL erreichbar.
- * Dann lässt dieser sich nicht per Script einschalten. Daher verwenden wir ein separates Gerät,
- * um den TV einzuschalten. Bei mir: Logitech Harmony
+ * Neu seit 12.01.2019:
+ * WAKE ON LAN (WOL) / auch: WIFI (WLAN)
+ * Wenn der Philips-TV für mehrere Minuten im Standby ist, dann ist dieser nicht mehr per PHILIPS_URL erreichbar.
+ * Hiermit kann man WOL aktivieren und ein paar Einstellungen machen.
+ * BITTE BEACHTET, DASS DIES EXPERIMENTIELL IST. Kann gut funktionieren (wie bei mir derzeit), ist aber noch nicht ausreichend getestet.
+ * Siehe auch: https://forum.iobroker.net/topic/28843/tester-gesucht-wake-on-lan-wol-f%C3%BCr-philips-tv/
+ * Wichtig:
+ *  - In den Netzwerk-Einstellungen des Philips-TV "Mit WiFi (WoWLAN) einschalten" aktivieren.
+ *    Hinweis: Das funktioniert auch bei mir bei einer reinen LAN-Verbindung, also ohne WLAN-Verbindung des Philips-TV.
+ *  - ioBroker muss im selben Netzwerk sein.
+ *  - (hier noch schreiben, was sonst noch zu beachten ist)
  */
-// Auf false setzen, wenn man kein Gerät hat, um den Philips zu schalten. Dann werden die weiteren 2 Settings nicht weiter beachtet.
-const CONTROL_DEVICE_USE = true;
-// State zum Gerät, das den TV ein/aus schaltet
-const CONTROL_DEVICE_STATE = 'harmony.0.Harmony_Hub_4.Philips_TV.PowerToggle';
-// Was in den Datenpunkt zum einschalten gesetzt werden muss. Bei Harmony ist dies ein Toggle, es wird 1 erwartet.
-const CONTROL_DEVICE_CMD_ON = 1;
+const WOL_USE = true; // Verwendung von "Wake on Lan" / WiFi aktivieren. Falls false, dann werden die weiteren Settings nicht weiter beachtet.
+const WOL_MAC_ADDR_1  = 'AA:AA:AA:AA:AA:AA';   // Philips TV MAC-Adresse. Bitte entsprechend eintragen (lt. "Netzwerkeinstellungen anzeigen" im Philips TV ersichtlich. Dabei entweder "Ethernet MAC Addresse" oder "MAC-Adressse, kabellos")
+const WOL_MAC_ADDR_2  = '';   // 2. Philips TV MAC-Adresse. Man kann hier noch eine 2. MAC-Adresse angeben (z.B. 1. vom LAN, und diese 2. vom WiFi). Falls nicht benötigt, diese 2. Adresse leer lassen.
+const WOL_PACKET_NUM = 5;  // Kann man so lassen; ggf. auf 6-10 erhöhen, falls es nicht funktioniert. Erklärung: Anzahl WOL-Pakete, die jeweils gesendet werden sollen (Number of packets to send). Default: 3
+const WOL_PACKET_INTERVAL = 100;   // Kann man so lassen. Erklärung: Interval between each packet	(in ms). Default: 100
+const WOL_A_DELAY = 4000; // Nach dieser Verzögerung in Millisekunden (ms) wird das eigentliche Kommando zum TV zum einschalten gesendet (COMMAND_TO_LAUNCH).
+
+/**
+ * WAKE ON LAN (WOL): ** ALTERNATIVE **  - EINSCHALTEN MITTELS EXTERNEM GERÄT
+ * Falls WOL nicht bei euch funktioniert, könnt ihr hiermit ein externes Gerät verwenden, um den Philips-TV einzuschalten.
+ * Ich verwende im Beispiel "Logitech Harmony" in Verbindung mit dem "harmony"-Adapter.
+ */
+const WOL_ALTERNATIVE_USE = false;  // Hiermit kann man das "Einschalten mittels externem Gerät" aktivieren, indem man auf true setzt. Falls false, dann werden die weiteren Settings nicht weiter beachtet.
+const CONTROL_DEVICE_STATE = 'harmony.0.Harmony_Hub_4.Philips_TV.PowerToggle';  // State zum Gerät, das den TV ein/aus schaltet
+const CONTROL_DEVICE_CMD_ON = 1;  // Was in den Datenpunkt zum einschalten gesetzt werden muss. Bei Harmony ist dies ein Toggle, es wird 1 erwartet.
+
+
+// Logging
+const LOG_INFO = true;   // Auf true setzen, wenn ein paar Infos dieses Scripts im Log ausgegeben werden dürfen, bei false bleiben die Infos komplett weg.
+const LOG_DEBUG = true;  // Auf true setzen, wenn zur Fehlersuche einige Meldungen ausgegeben werden sollen.
 
 
 /*******************************************************************************
@@ -71,6 +100,7 @@ pCommands['Cmd: Ambilight On Video Game'] = ['ambilight/currentconfiguration',  
 pCommands['Cmd: Ambilight On Video Comfort'] = ['ambilight/currentconfiguration',   '{"styleName":"FOLLOW_VIDEO","isExpert":false,"menuSetting":"COMFORT"}'];
 pCommands['Cmd: Ambilight On Video Relax'] = ['ambilight/currentconfiguration',   '{"styleName":"FOLLOW_VIDEO","isExpert":false,"menuSetting":"RELAX"}'];
 pCommands['Launch: Amazon Prime Video'] = ['activities/launch',   '{"id":"com.amazon.amazonvideo.livingroom","order":0,"intent":{"action":"Intent{act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 pkg=com.amazon.amazonvideo.livingroom }","component":{"packageName":"com.amazon.amazonvideo.livingroom","className":"com.amazon.ignition.IgnitionActivity"}},"label":"Prime Video"}'];
+pCommands['Launch: Home']  = ['input/key',   '{"key":"Home"}']; // Same as 'Key: Home' below.
 pCommands['Launch: Kodi'] = ['activities/launch',   '{"id":"org.xbmc.kodi","order":0,"intent":{"action":"Intent{act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 pkg=org.xbmc.kodi }","component":{"packageName":"org.xbmc.kodi","className":"org.xbmc.kodi.Splash"}},"label":"Kodi"}'];
 pCommands['Launch: Netflix'] = ['activities/launch',   '{"id":"com.netflix.ninja","order":0,"intent":{"action":"Intent{act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 pkg=com.netflix.ninja }","component":{"packageName":"com.netflix.ninja","className":"com.netflix.ninja.MainActivity"}},"label":"Netflix"}'];
 pCommands['Launch: YouTube'] = ['activities/launch',   '{"id":"com.google.android.apps.youtube.tv.activity.ShellActivity-com.google.android.youtube.tv","order":0,"intent":{"action":"Intent{act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 pkg=com.google.android.youtube.tv cmp=com.google.android.youtube.tv/com.google.android.apps.youtube.tv.activity.ShellActivity }","component":{"packageName":"com.google.android.youtube.tv","className":"com.google.android.apps.youtube.tv.activity.ShellActivity"}},"label":"YouTube"}'];
@@ -129,6 +159,9 @@ pCommands['Key: YellowColour']  = ['input/key',   '{"key":"YellowColour"}'];
  ******************************* Ab hier nichts mehr ändern / Stop editing here! *******************************
  ***************************************************************************************************************/
 
+// Define the final URL to Philips TV
+const PHILIPS_FINAL_URL = PHILIPS_HTTP + '://' + PHILIPS_IP + ':' + PHILIPS_PORT + '/' + PHILIPS_API_VERSION + '/';
+
 
 /*******************************************************************************
  * Initial Function
@@ -171,16 +204,17 @@ function subscribeStates() {
  */
 function doPostCommand(id) {
     if (id in pCommands) { // Check if Key exists and typed correctly - https://stackoverflow.com/questions/1098040/checking-if-a-key-exists-in-a-javascript-object
-        var exec = require('child_process').exec;
-        let postArgs = "-X POST --digest --insecure -u " + PHILIPS_USER + ":" + PHILIPS_PASS + " -d '" + pCommands[id][1] + "' " + PHILIPS_URL + pCommands[id][0];
+        let exec = require('child_process').exec;
+        let postArgs = "-X POST --digest --insecure -u " + PHILIPS_USER + ":" + PHILIPS_PASS + " -d '" + pCommands[id][1] + "' " + PHILIPS_FINAL_URL + pCommands[id][0];
         exec('curl ' + postArgs, function (error, stdout, stderr) {
-            if (LOG_DEBUG) log('stdout: ' + stdout);
-            if (LOG_DEBUG) log('stderr: ' + stderr);
+            if(LOG_INFO) log('Sending command [' + id + '] to Philips TV.');
+            if (LOG_DEBUG && stdout != '') log('[Debug] stdout: ' + stdout);
             if (error !== null) {
-                log('exec error: ' + error);
+                log('TV seems to be off and in deep sleep, so we could not send command [' + id + '] to the TV.', 'warn');
+                if (LOG_DEBUG) log('[Debug] Error message: ' + error);
             }
         });
-    } else if(id == '') {
+    } else if (id == '') {
         // do nothing, will be empty if script is initally started or user did not select value
     } else {
         log('Wrong command provided to Philips TV: [' + id + ']', 'warn');
@@ -194,20 +228,36 @@ function doPostCommand(id) {
 function powerPhilipsTv(pwrState) {
     // We need to get the GET command to get the TV's powerstate
     let exec = require('child_process').exec;
-    let args = "-X GET --digest --insecure -u " + PHILIPS_USER + ":" + PHILIPS_PASS + " " + PHILIPS_URL + "powerstate";
+    let args = "-X GET --digest --insecure -u " + PHILIPS_USER + ":" + PHILIPS_PASS + " " + PHILIPS_FINAL_URL + "powerstate";
     exec('curl ' + args, function (error, stdout, stderr) {
         if (error) {
 
             // TV is not reachable.
-            
-            if (LOG_DEBUG) log('stderr: ' + stderr, 'warn');
+            if (LOG_DEBUG) log('[Debug] TV is not reachable and in deep sleep.'); // we could provide stderr here. But actually don't need it at this time in log.
 
             if(pwrState) {
                 //TV shall be turned on.
-
                 // Since it is not reachable, we assume it is off.
-                // Therefore we turn it on through external device
-                if (CONTROL_DEVICE_USE) {
+                // Therefore we need to wake up or use an external device
+                if (LOG_DEBUG) log('[Debug] Starting with turning TV on...');
+                if (WOL_USE) {
+                    if (LOG_DEBUG) log('[Debug] Per script config, TV shall be turned on via WOL. Now executing accordingly.');
+
+                    // We execute WOL to be able to reach the TV and turn it on.
+                    let macArray = cleanArray([WOL_MAC_ADDR_1, WOL_MAC_ADDR_2]);
+                    wakeOnLan(macArray, function() {
+                        if (LOG_DEBUG) log ('[Debug] WOL packets successfully sent. Now we wait ' + WOL_A_DELAY + ' ms, until we launch the TV.');
+                        // We need a timeout here, since the TV will need some time after WOL to be able to receive commands.
+                        setTimeout(function() {
+                            if (LOG_DEBUG) log('[Debug] Command [ ' + COMMAND_TO_LAUNCH + '] sent to TV to turn it on.')
+                            doPostCommand(COMMAND_TO_LAUNCH);
+                        }, WOL_A_DELAY)
+
+                    });
+
+                } else if (!WOL_USE && WOL_ALTERNATIVE_USE) {
+                    if (LOG_DEBUG) log('[Debug] Per script config, TV shall be turned on via external device. Now executing accordingly.');
+                    // We use an external device to turn TV on
                     setState(CONTROL_DEVICE_STATE, CONTROL_DEVICE_CMD_ON);
                     if (LOG_INFO) log('Execute turning TV on: TV is in deep sleep, turning it on now...')
                 } else {
@@ -229,19 +279,13 @@ function powerPhilipsTv(pwrState) {
             let powerStateStr = stdout;
             powerStateStr = powerStateStr.replace(/powerstate/gi, ''); // remove term 'powerstate'
             powerStateStr = powerStateStr.replace(/([^a-z]+)/gi, ''); // just keep a-z
-            if (LOG_INFO) log('We have connection to the TV. Power State: ' + powerStateStr);
+            if (LOG_DEBUG) log('[Debug] We have connection to the TV. Power State: ' + powerStateStr);
 
             if(pwrState) {
                 //TV shall be turned on.
                 if ( powerStateStr === 'Standby') {
                     // TV is in Standby, so let's turn it on
-                    if (CONTROL_DEVICE_USE) {
-                        // Although TV is reachable, we use the external device, as it might be that it is no longer
-                        // reachable in the meantime, as POST command can take a few (m)seconds
-                        setState(CONTROL_DEVICE_STATE, CONTROL_DEVICE_CMD_ON);
-                    } else {
-                        doPostCommand('Key: Home');
-                    }
+                    doPostCommand(COMMAND_TO_LAUNCH);
                     if (LOG_INFO) log('Execute turning TV on: turning it on now...')
                 } else {
                     // Nothing, since TV is not in Standby.
@@ -262,6 +306,40 @@ function powerPhilipsTv(pwrState) {
         }
     });
 }
+
+
+/**
+ * Send WOL packets to provided MAC addresses.
+ * @param {array} macAddresses  Array of strings containing MAC addresses
+ * @param {object} [callback]  Optional: a callback function -- This provided function will be executed once all WOL packets were sent.
+ */
+function wakeOnLan(macAddresses, callback) {
+ 
+    let wol = require('wake_on_lan');
+    let numMacs = macAddresses.length;
+    macAddresses.forEach(function(loopMacAddress) {
+
+        wol.wake(loopMacAddress, { num_packets:WOL_PACKET_NUM, interval:WOL_PACKET_INTERVAL }, function(error) {
+        if (LOG_DEBUG) log ('[Debug] Currently processing MAC address [' + loopMacAddress + '].');
+            if (error) {
+                log('Error occurred while sending ' + WOL_PACKET_NUM + ' WOL packets to [' + loopMacAddress + ']', 'warn');
+            } else {
+                if (LOG_DEBUG) log('[Debug] Sending  ' + WOL_PACKET_NUM + ' WOL packets to [' + loopMacAddress + '] successfully exectuted.');
+                numMacs--;
+                if (numMacs === 0) {
+                    if (LOG_DEBUG) log('[Debug] Completed: all MAC addresses processed.');
+                    if (typeof callback === 'function') { // execute if a function was provided to parameter callback
+                        //if (LOG_DEBUG) log('[Debug] Function was provided in callback parameter');
+                        return callback();
+                    }
+                }
+            }
+        });
+
+    });
+}
+
+
 
 
 function createScriptStates() {
@@ -287,4 +365,21 @@ function createScriptStates() {
     createState(STATE_PATH + 'TvOn',  {'name':'Turn TV On',  'type':'boolean', 'read':false, 'write':true, 'role':'button', 'def':false });
     createState(STATE_PATH + 'TvOff', {'name':'Turn TV Off', 'type':'boolean', 'read':false, 'write':true, 'role':'button', 'def':false });
 
+}
+
+
+/**
+ * Clean Array: Removes all falsy values: undefined, null, 0, false, NaN and "" (empty string)
+ * Source: https://stackoverflow.com/questions/281264/remove-empty-elements-from-an-array-in-javascript
+ * @param {array} inputArray       Array to process
+ * @return {array}  Cleaned array
+ */
+function cleanArray(inputArray) {
+  let newArray = [];
+  for (let i = 0; i < inputArray.length; i++) {
+    if (inputArray[i]) {
+      newArray.push(inputArray[i]);
+    }
+  }
+  return newArray;
 }

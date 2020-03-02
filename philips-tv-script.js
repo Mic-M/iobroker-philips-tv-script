@@ -17,6 +17,7 @@
  *  - Some info: https://community.openhab.org/t/philips-tv-2016-binding/64579/61
  * ----------------------------------------------------
  * Change Log:
+ *  1.3   Mic-M     * Add state 'powerStatus' to indicate if TV is on or off (for visualization)
  *  1.2   Mic-M     * Add experimental options: COMMAND_AFTER... for improved Wake On LAN/WiFi
  *  1.1   Apollon77 * add powerState Polling when on to detect when it goes offline
  *                  * no curl required anymore
@@ -180,7 +181,14 @@ pCommands['PowerState: Standby']  = ['powerstate',   '{"powerstate":"Standby"}']
 /***************************************************************************************************************
  ******************************* Ab hier nichts mehr ändern / Stop editing here! *******************************
  ***************************************************************************************************************/
- 
+
+/****************************************************************************************
+ * Global variables and constants
+ ****************************************************************************************/
+
+// Global "channels" variable.
+const channels = {};
+
 // Define the final URL to Philips TV
 const PHILIPS_FINAL_URL = PHILIPS_HTTP + '://' + PHILIPS_IP + ':' + PHILIPS_PORT + '/' + PHILIPS_API_VERSION + '/';
  
@@ -197,7 +205,6 @@ function init() {
             if (CREATE_CHANNEL_STATES) {
                 if (powerState) {
                     initChannels(() => {
- 
                         createChannelStates(() => {
                             // 2. Subscriptions
                             subscribeStates();
@@ -218,14 +225,15 @@ function init() {
  
 function createChannelStates(callback) {
     let createCount = 0;
- 
     Object.keys(channels).forEach(channelName => {
+        if (LOG_DEBUG) log('[Debug] Function createChannelStates(): We are in the channels loop');
         const channelStates = {};
         Object.keys(channels[channelName].presets).forEach(channel => {
             channelStates[channel] = channels[channelName].presets[channel].name;
         });
         createCount++;
         createState(STATE_PATH + 'Channels.' + channelName, undefined, true, {'name':'Set Channel ' + channelName, 'type':'number', 'read':false, 'write':true, 'role':'value', 'states': channelStates}, {channelData: channels[channelName]}, () => !--createCount && callback && callback());
+
     });
     !createCount && callback && callback()
 }
@@ -411,7 +419,7 @@ function powerPhilipsTv(pwrState) {
                             doPostCommand(COMMAND_TO_LAUNCH);
                             powerCheck(5000);
                         }, WOL_A_DELAY)
-                     });
+                    });
                     // ######################### Experimental (Version 1.2) #########################
                     if (COMMAND_AFTER_WOL_DO) {
                         setTimeout(function() {
@@ -526,6 +534,14 @@ function createScriptStates(callback) {
     createState(STATE_PATH + 'TvOn',  {'name':'Turn TV On',  'type':'boolean', 'read':false, 'write':true, 'role':'button', 'def':false }, () => !--createCount && callback && callback());
     createCount++;
     createState(STATE_PATH + 'TvOff', {'name':'Turn TV Off', 'type':'boolean', 'read':false, 'write':true, 'role':'button', 'def':false }, () => !--createCount && callback && callback());
+
+    /**
+     *  Power Status state
+     */
+    createCount++;
+    createState(STATE_PATH + 'powerStatus',  {'name':'Turn TV On',  'type':'boolean', 'read':false, 'write':false, 'role':'state', 'def':false }, () => !--createCount && callback && callback());
+
+
 }
  
 /**
@@ -571,6 +587,7 @@ function powerCheck(delay, callback) {
         const powerState = err ? false : res.powerstate === 'On';
         setState(STATE_PATH + 'TvOn', powerState, true);
         setState(STATE_PATH + 'TvOff', !powerState, true);
+        setState(STATE_PATH + 'powerStatus', powerState, true);
  
         if (powerState && POWERCHECK_INTERVAL > 0) {
             powerCheckTimeout = setTimeout(() => {
@@ -583,15 +600,13 @@ function powerCheck(delay, callback) {
     });
 }
  
-const channels = {};
 /**
  * Read all Channels and initialize "channels" global variable
  * @param {function} initCallback       callback function that gets called once ready
  */
 function initChannels(initCallback) {
- 
+
     doGetRequest('channeldb/tv', (err, channelLists) => {
- 
         function processOneChannelList(prefix, listId, listData, callback) {
             const isFavoriteList = prefix === 'favoriteLists';
             doGetRequest('channeldb/tv/' + prefix + '/' + listId, (err, list) => {
